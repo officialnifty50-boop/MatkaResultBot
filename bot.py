@@ -1,4 +1,7 @@
 import os
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -7,59 +10,182 @@ from telegram.ext import (
     ContextTypes,
 )
 
-TOKEN = os.getenv("BOT_TOKEN")
+# ==============================
+# SETTINGS
+# ==============================
 
+BOT_TOKEN = os.environ["BOT_TOKEN"]
+
+CHANNEL_LINK = "https://t.me/+vR2rLmOtc2EyOWQ1"
+
+
+# ==============================
+# RENDER FREE PORT SERVER
+# ==============================
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"Matka Result Bot is running")
+
+    def log_message(self, format, *args):
+        return
+
+
+def run_web_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+
+    print(f"Web server running on port {port}")
+
+    server.serve_forever()
+
+
+# ==============================
+# START MESSAGE
+# ==============================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    name = update.effective_user.first_name or "User"
+
+    message = f"""
+👋 Welcome {name}!
+
+📢 MATKA RESULT BOT
+
+Get channel announcements and updates in one place.
+
+🔔 Regular Updates
+📢 Important Announcements
+📋 Channel Information
+
+👇 Join our private Telegram channel below.
+
+🔞 18+ only.
+Please follow applicable local laws.
+"""
+
     keyboard = [
-        [InlineKeyboardButton("📢 Announcements", callback_data="news")],
-        [InlineKeyboardButton("ℹ️ About", callback_data="about")],
-        [InlineKeyboardButton("❓ Help", callback_data="help")],
+        [
+            InlineKeyboardButton(
+                "📢 JOIN PRIVATE CHANNEL",
+                url=CHANNEL_LINK
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "ℹ️ ABOUT",
+                callback_data="about"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "❓ HELP",
+                callback_data="help"
+            )
+        ]
     ]
 
     await update.message.reply_text(
-        "👋 Welcome to Matka Result Bot\n\n"
-        "General information & announcements.",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ==============================
+# BUTTONS
+# ==============================
+
+async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     query = update.callback_query
     await query.answer()
 
-    if query.data == "news":
-        text = "📢 अभी कोई नया announcement उपलब्ध नहीं है."
-    elif query.data == "about":
-        text = (
-            "ℹ️ @MatkaResult_bot\n\n"
-            "General information & announcements bot."
+    if query.data == "about":
+
+        text = """
+ℹ️ MATKA RESULT BOT
+
+This bot provides channel information and announcements.
+
+Use the button below to access the private Telegram channel.
+"""
+
+        keyboard = [[
+            InlineKeyboardButton(
+                "📢 JOIN PRIVATE CHANNEL",
+                url=CHANNEL_LINK
+            )
+        ]]
+
+        await query.message.reply_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
-    else:
-        text = "❓ Help\n\n/start - Main Menu\n/help - Help"
 
-    await query.edit_message_text(text)
+    elif query.data == "help":
+
+        await query.message.reply_text(
+            "❓ HELP\n\n"
+            "Use /start to open the main menu.\n\n"
+            "Tap 📢 JOIN PRIVATE CHANNEL to open the channel."
+        )
 
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ==============================
+# HELP COMMAND
+# ==============================
+
+async def help_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
     await update.message.reply_text(
+        "❓ HELP\n\n"
         "/start - Main Menu\n"
         "/help - Help"
     )
 
 
+# ==============================
+# MAIN
+# ==============================
+
 def main():
-    if not TOKEN:
-        raise RuntimeError("BOT_TOKEN missing")
 
-    app = Application.builder().token(TOKEN).build()
+    # Start Render HTTP server
+    threading.Thread(
+        target=run_web_server,
+        daemon=True
+    ).start()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CallbackQueryHandler(button))
+    application = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .build()
+    )
 
-    print("Bot running...")
-    app.run_polling()
+    application.add_handler(
+        CommandHandler("start", start)
+    )
+
+    application.add_handler(
+        CommandHandler("help", help_command)
+    )
+
+    application.add_handler(
+        CallbackQueryHandler(buttons)
+    )
+
+    print("Matka Result Bot Running...")
+
+    application.run_polling(
+        allowed_updates=Update.ALL_TYPES
+    )
 
 
 if __name__ == "__main__":
